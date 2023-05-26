@@ -9,6 +9,19 @@ CSV_FILE="./software_list.csv"
 # Debug mode
 DEBUG_MODE=false
 
+# Required tools
+REQUIRED_TOOLS=("curl" "hdiutil" "pkgbuild")
+
+# Function to check required tools
+check_required_tools() {
+  for tool in "${REQUIRED_TOOLS[@]}"; do
+    if ! type "$tool" > /dev/null 2>&1; then
+      show_error_message "The required tool $tool is not installed."
+      exit 1
+    fi
+  done
+}
+
 # Function to clean temporary files
 clean_temp_files() {
   rm -rf "$TMP_FOLDER"
