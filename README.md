@@ -36,6 +36,20 @@ In case the downloaded file is in a format other than .dmg, such as .zip, .tar.g
 
 ---
 
+**Suggested Improvements**
+
+The script could be improved in several ways to increase its robustness and maintainability:
+
+- **Required tools check**: Before running any commands, it's a good idea to check if the required tools (curl, hdiutil, pkgbuild, etc.) are present on the system and if their version is compatible with what you need.
+
+- **Robust error handling**: Instead of terminating the script in case of error, consider providing an option to continue with the next entry in the CSV file in case of error, rather than stopping the entire process.
+
+- **Use functions for repetitive tasks**: Some parts of the code are repeated (for example, the part that adds an entry to the CSV file after a successful conversion). These parts could be refactored into functions to make the code cleaner and more maintainable.
+
+- **Improved readability**: Consider adding more comments to the code to explain what it's doing, especially in the more complex parts. This will make the code easier to understand for other developers.
+
+---
+
 This is free and unencumbered software released into the public domain.
 
 Anyone is free to copy, modify, publish, use, compile, sell, or distribute this software, either in source code form or as a compiled binary, for any purpose, commercial or non-commercial, and by any means.
