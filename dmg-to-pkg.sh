@@ -27,7 +27,7 @@ clean_temp_files() {
   rm -rf "$TMP_FOLDER"
 }
 
-# Function to display an error message and exit
+# Function to display an error message
 show_error_message() {
   echo "Error: $1" >&2
 }
@@ -57,6 +57,7 @@ entry_exists_in_csv() {
   fi
 }
 
+# Function to handle conversion error
 handle_conversion_error() {
   local software_name="$1"
   local download_url="$2"
@@ -72,6 +73,7 @@ handle_conversion_error() {
     local MOUNT_OUTPUT=$(hdiutil attach -nobrowse "$converted_dmg" | grep -oE '/Volumes/[^[:space:]]+' | tail -1)
     local VOLUME_NAME=$(basename "$MOUNT_OUTPUT")
 
+    # Check successful mount
     if [ -z "$VOLUME_NAME" ]; then
       show_error_message "Failed to mount the converted .dmg file properly."
       return 1
@@ -79,12 +81,14 @@ handle_conversion_error() {
 
     show_debug_message "The converted .dmg file has been successfully mounted to volume $VOLUME_NAME."
 
+    # Perform conversion again
     pkgbuild --root "$MOUNT_OUTPUT" --install-location "/Applications" "$DEST_FOLDER$software_name.pkg" >/dev/null 2>&1
     conversion_status=$?
 
     if [ $conversion_status -eq 0 ]; then
       echo "Conversion to .pkg format was successful."
 
+      # Check if the software already exists in the CSV file
       if [ -f "$CSV_FILE" ]; then
         if entry_exists_in_csv "$CSV_FILE" "$software_name" "$download_url"; then
           show_warning_message "The software already exists in the CSV file."
@@ -92,8 +96,10 @@ handle_conversion_error() {
         fi
       fi
 
+      # Ask if the software should be added to the CSV file
       read -r -p "Do you want to add it to the CSV file? (Y/N): " response
       if [ "$response" = "Y" ] || [ "$response" = "y" ]; then
+        # Add to CSV file
         cp "$CSV_FILE" "$TMP_FOLDER"
         echo "$software_name,$download_url" >> "$TMP_FOLDER$CSV_FILE"
         sort -t',' -k1,1 -o "$TMP_FOLDER$CSV_FILE" "$TMP_FOLDER$CSV_FILE"
@@ -101,6 +107,7 @@ handle_conversion_error() {
         echo "The software has been added to the CSV file."
       fi
 
+      # Detach the converted file
       hdiutil detach "$MOUNT_OUTPUT"
       rm "$converted_dmg"
       return 0
@@ -136,101 +143,104 @@ if [ "$1" = "--debug" ]; then
   shift
 fi
 
+# Function to process a software entry
 process_software_entry() {
   local software_name="$1"
   local download_url="$2"
 
   echo "Processing $software_name..."
 
-# Create temporary folder if it doesn't exist
-mkdir -p "$TMP_FOLDER" || show_error_message "Failed to create temporary folder $TMP_FOLDER."
+  # Create temporary folder if it doesn't exist
+  mkdir -p "$TMP_FOLDER" || show_error_message "Failed to create temporary folder $TMP_FOLDER."
 
-# Create destination folder if it doesn't exist
-mkdir -p "$DEST_FOLDER" || show_error_message "Failed to create destination folder $DEST_FOLDER."
+  # Create destination folder if it doesn't exist
+  mkdir -p "$DEST_FOLDER" || show_error_message "Failed to create destination folder $DEST_FOLDER."
 
-# Download the file to the temporary folder
+  # Download the file to the temporary folder
   echo "Downloading $download_url..."
-retry_count=3
-while [ $retry_count -gt 0 ]; do
+  retry_count=3
+  while [ $retry_count -gt 0 ]; do
     curl -o "$TMP_FOLDER$software_name.dmg" -JL "$download_url" && break
-  echo "Download error. Retrying..."
-  ((retry_count--))
-done
+    echo "Download error. Retrying..."
+    ((retry_count--))
+  done
   [ $retry_count -eq 0 ] && show_error_message "Failed to download file from $download_url."
 
-# Verify the integrity of the .dmg file
-echo "Verifying .dmg file integrity..."
+  # Verify the integrity of the .dmg file
+  echo "Verifying .dmg file integrity..."
   hdiutil verify "$TMP_FOLDER$software_name.dmg" >/dev/null 2>&1
-verify_status=$?
+  verify_status=$?
 
-if [ $verify_status -ne 0 ]; then
+  if [ $verify_status -ne 0 ]; then
     show_error_message "The downloaded .dmg file for $software_name is either damaged or not valid."
     return
-fi
+  fi
 
-# Mount the .dmg file and get the volume name
+  # Mount the .dmg file and get the volume name
   show_debug_message "Mounting $software_name.dmg..."
   MOUNT_OUTPUT=$(hdiutil attach -nobrowse "$TMP_FOLDER$software_name.dmg" | awk -F '\t' '/\/Volumes\// {print $NF; exit}')
-VOLUME_NAME=$(basename "$MOUNT_OUTPUT")
+  VOLUME_NAME=$(basename "$MOUNT_OUTPUT")
 
-# Check successful mount
-if [ -z "$VOLUME_NAME" ]; then
-  show_error_message "Failed to mount the .dmg file properly."
+  # Check successful mount
+  if [ -z "$VOLUME_NAME" ]; then
+    show_error_message "Failed to mount the .dmg file properly."
     return
-fi
+  fi
 
-show_debug_message "The .dmg file has been successfully mounted to volume $VOLUME_NAME."
+  show_debug_message "The .dmg file has been successfully mounted to volume $VOLUME_NAME."
 
-# Remove existing .pkg file
+  # Remove existing .pkg file
   if [ -f "$DEST_FOLDER$software_name.pkg" ]; then
     rm "$DEST_FOLDER$software_name.pkg"
-fi
+  fi
 
-# Convert to .pkg format
+  # Convert to .pkg format
   echo "Converting $software_name to .pkg format..."
   pkg_name="$DEST_FOLDER$software_name.pkg"
-pkgbuild --root "$MOUNT_OUTPUT" --install-location "/Applications" "$pkg_name" >/dev/null 2>&1
-conversion_status=$?
+  pkgbuild --root "$MOUNT_OUTPUT" --install-location "/Applications" "$pkg_name" >/dev/null 2>&1
+  conversion_status=$?
 
-# Check conversion status
-if [ $conversion_status -eq 0 ]; then
-  echo "Conversion to .pkg format was successful."
+  # Check conversion status
+  if [ $conversion_status -eq 0 ]; then
+    echo "Conversion to .pkg format was successful."
 
-  # Check if the software already exists in the CSV file
-  if [ -f "$CSV_FILE" ]; then
+    # Check if the software already exists in the CSV file
+    if [ -f "$CSV_FILE" ]; then
       if entry_exists_in_csv "$CSV_FILE" "$software_name" "$download_url"; then
-      show_warning_message "The software already exists in the CSV file."
+        show_warning_message "The software already exists in the CSV file."
+      fi
     fi
-  fi
 
-  # Ask if the software should be added to the CSV file
-  read -r -p "Do you want to add it to the CSV file? (Y/N): " response
-  if [ "$response" = "Y" ] || [ "$response" = "y" ]; then
-    # Add to CSV file
-    cp "$CSV_FILE" "$TMP_FOLDER"
+    # Ask if the software should be added to the CSV file
+    read -r -p "Do you want to add it to the CSV file? (Y/N): " response
+    if [ "$response" = "Y" ] || [ "$response" = "y" ]; then
+      # Add to CSV file
+      cp "$CSV_FILE" "$TMP_FOLDER"
       echo "$software_name,$download_url" >> "$TMP_FOLDER$CSV_FILE"
-    sort -t',' -k1,1 -o "$TMP_FOLDER$CSV_FILE" "$TMP_FOLDER$CSV_FILE"
-    mv "$TMP_FOLDER$CSV_FILE" "$CSV_FILE"
+      sort -t',' -k1,1 -o "$TMP_FOLDER$CSV_FILE" "$TMP_FOLDER$CSV_FILE"
+      mv "$TMP_FOLDER$CSV_FILE" "$CSV_FILE"
       echo "The software has been added to the CSV file."
+    fi
+
+    # Check if debug mode is enabled
+    if [ "$DEBUG_MODE" = true ]; then
+      echo "Conversion details:"
+      cat "$TMP_FOLDER$software_name_conversion_log.txt"
+    fi
+  else
+    handle_conversion_error "$software_name" "$download_url"
   fi
 
-# Check if debug mode is enabled
-if [ "$DEBUG_MODE" = true ]; then
-  echo "Conversion details:"
-      cat "$TMP_FOLDER$software_name_conversion_log.txt"
-fi
-else
-    handle_conversion_error "$software_name" "$download_url"
-fi
+  # Detach the .dmg file
+  hdiutil detach "$MOUNT_OUTPUT"
 
-# Detach the .dmg file
-hdiutil detach "$MOUNT_OUTPUT"
+  # Clean up temporary files
+  clean_temp_files
 
-# Remove temporary files
-clean_temp_files
-
+  echo "--------------------------------------"
 }
 
+# Iterate through the CSV file
 while IFS=, read -r software_name download_url; do
   process_software_entry "$software_name" "$download_url"
 done <"$CSV_FILE"
