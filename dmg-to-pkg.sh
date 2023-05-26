@@ -57,6 +57,11 @@ entry_exists_in_csv() {
   fi
 }
 
+handle_conversion_error() {
+  local software_name="$1"
+  local download_url="$2"
+  local converted_dmg="$TMP_FOLDER$software_name-converted.dmg"
+
   echo "Error: Failed to convert $software_name to .pkg format."
   echo "Retrying conversion with hdiutil convert..."
 
@@ -109,6 +114,8 @@ entry_exists_in_csv() {
     show_error_message "Please check the .dmg file or conversion permissions."
     return 1
   fi
+}
+
 # Check if the URL and software name were provided as arguments
 if [ $# -lt 2 ]; then
   # If no arguments were provided, check the CSV file
@@ -162,8 +169,8 @@ if [ $verify_status -ne 0 ]; then
 fi
 
 # Mount the .dmg file and get the volume name
-show_debug_message "Mounting $SOFTWARE_NAME.dmg..."
-MOUNT_OUTPUT=$(hdiutil attach -nobrowse "$TMP_FOLDER$SOFTWARE_NAME.dmg" | awk -F '\t' '/\/Volumes\// {print $NF; exit}') || show_error_message "Failed to mount the .dmg file."
+  show_debug_message "Mounting $software_name.dmg..."
+  MOUNT_OUTPUT=$(hdiutil attach -nobrowse "$TMP_FOLDER$software_name.dmg" | awk -F '\t' '/\/Volumes\// {print $NF; exit}')
 VOLUME_NAME=$(basename "$MOUNT_OUTPUT")
 
 # Check successful mount
@@ -191,9 +198,8 @@ if [ $conversion_status -eq 0 ]; then
 
   # Check if the software already exists in the CSV file
   if [ -f "$CSV_FILE" ]; then
-    if entry_exists_in_csv "$CSV_FILE" "$SOFTWARE_NAME" "$DOWNLOAD_URL"; then
+      if entry_exists_in_csv "$CSV_FILE" "$software_name" "$download_url"; then
       show_warning_message "The software already exists in the CSV file."
-      exit 0
     fi
   fi
 
@@ -202,22 +208,17 @@ if [ $conversion_status -eq 0 ]; then
   if [ "$response" = "Y" ] || [ "$response" = "y" ]; then
     # Add to CSV file
     cp "$CSV_FILE" "$TMP_FOLDER"
-    echo "$SOFTWARE_NAME,$DOWNLOAD_URL" >> "$TMP_FOLDER$CSV_FILE"
+      echo "$software_name,$download_url" >> "$TMP_FOLDER$CSV_FILE"
     sort -t',' -k1,1 -o "$TMP_FOLDER$CSV_FILE" "$TMP_FOLDER$CSV_FILE"
     mv "$TMP_FOLDER$CSV_FILE" "$CSV_FILE"
-    echo "The software has been added to the CSV file and sorted alphabetically."
-
-    # Show the updated software list
-    echo "Updated software list:"
-    awk -F ',' 'NR>1 {print $1","$2}' "$CSV_FILE" | sort -t',' -k1,1
+      echo "The software has been added to the CSV file."
   fi
 
 # Check if debug mode is enabled
 if [ "$DEBUG_MODE" = true ]; then
   echo "Conversion details:"
-  cat "$TMP_FOLDER$SOFTWARE_NAME_conversion_log.txt"
+      cat "$TMP_FOLDER$software_name_conversion_log.txt"
 fi
-
 else
     handle_conversion_error "$software_name" "$download_url"
 fi
